@@ -86,6 +86,36 @@ golden <- function(f,lower, upper, tol){
   return((upper + lower) / 2)
 }
 
+golden_max <- function(f,lower, upper, tol){
+  
+  alpha <- (sqrt(5)-1)/2
+  n <- ceiling(log(2*tol/(upper-lower),alpha))
+  iter = 0
+  x1 <- alpha * lower + (1-alpha) * upper
+  f.x1 <- f(x1)
+  x2 <- (1-alpha) * lower + alpha * upper
+  f.x2 <- f(x2)
+  while(abs(upper - lower) > 2 * tol){
+    if (f.x1 > f.x2){
+      upper <- x2
+      x2 <- x1
+      f.x2 <- f.x1
+      x1 <- alpha * lower + (1-alpha) * upper
+      f.x1 <- f(x1)
+    } else {
+      lower <- x1
+      x1 <- x2
+      f.x1 <- f.x2
+      x2 <- (1-alpha) * lower + alpha * upper
+      f.x2 <- f(x2)
+    }
+    iter = iter + 1
+    #cat(" iteracja: ", iter, "a= ",lower, "b= ", upper, "\n")
+  }
+  #cat("Liczba iteracji", n, "\n")
+  return((lower + upper) / 2)
+}
+
 plot(f1, 0.1 , 5)
 
 golden(f1, 0.1, 1, 0.001)
@@ -388,7 +418,7 @@ df8(-1.54)/df2_f8(-1.54)
 
 
 #######################
-rm(list=ls())
+
 
 
 library(rgl) # wczytanie bliblioteki
@@ -636,3 +666,105 @@ persp3d(x,y,z,col="lightblue",xlab="x",ylab="y",zlab="z",shade=0.8) #
 newton(f4,c(-4,4),0.001)#w newtonie obojetne czy f4 czy mf4
 newton(mf4,c(-4,4),0.001)
 cauchy.golden(mf4,c(-4,4),0.001)#w cauchy golden musi byc mf4
+
+
+library(numDeriv)
+fletcher.reeves <- function(f, x, tol) {
+  iteracja <- 1
+  beta <- 1
+  d <- -grad(f,x)
+  repeat {
+    g <- function(a) {f(x + a * d)}
+    step <- golden(g,0,5,tol)
+    new.x <- x + step * d
+    cat("Iteracja: ", iteracja , "; x= ",x,"; f(x): ",f(x),"\n")
+    if (dist(rbind(new.x,x)) < tol) {
+      cat("Iteracja: ", iteracja +1 , "; x= ",x,"; f(x): ",f(x),"\n")
+      return(new.x)
+    }
+    beta <- (grad(f,new.x) %*% grad(f,new.x)) / (grad(f,x) %*% grad(f,x))
+    d <- -grad(f,new.x) + as.vector(beta) * d
+    x <- new.x
+    iteracja <- iteracja +1
+  }
+}
+
+#fletcher.reeves(f3,c(-4,4),0.001)
+fletcher.reeves(mf4,c(-4,4),0.001)
+
+
+fletcher.reeves.max <- function(f, x, tol) {
+  iteracja <- 1
+  beta <- 1
+  d <- grad(f,x)
+  repeat {
+    g <- function(a) {f(x + a * d)}
+    step <- golden_max(g,0,5,tol)
+    new.x <- x + step * d
+    cat("Iteracja: ", iteracja , "; x= ",x,"; f(x): ",f(x),"\n")
+    if (dist(rbind(new.x,x)) < tol) {
+      cat("Iteracja: ", iteracja +1 , "; x= ",x,"; f(x): ",f(x),"\n")
+      return(new.x)
+    }
+    beta <- (grad(f,new.x) %*% grad(f,new.x)) / (grad(f,x) %*% grad(f,x))
+    d <- grad(f,new.x) + as.vector(beta) * d
+    x <- new.x
+    iteracja <- iteracja +1
+  }
+}
+
+fletcher.reeves.max(f4,c(-4,4), 0.001)
+
+#forma kwadratowa
+fk <- function(x){
+  x[1]^2-x[1]*x[2]+x[2]^2-4*x[1]-x[2]
+}
+
+fki <- function(x,y){x^2-x*y+y^2-4*x-y}
+
+x <- seq(-15, 15, length.out = 30) # podanie zakresu
+
+y <- seq(-15, 15, length.out = 30) 
+
+z <- outer(x,y, fki) # obliczenie wartości 
+
+persp3d(x,y,z,col="lightblue",xlab="x",ylab="y",zlab="z",shade=0.8) #
+
+
+fletcher.reeves(fk,c(-4,4),0.0001)
+cauchy.golden(fk, c(-10,10),0.000001)
+
+####################
+#w projekcie trzeba uzyc metody quasi newtona
+library(numDeriv)
+library(matlib)
+dfp <- function(f, x, tol) {
+  n <- length(x)
+  v <- diag(n)
+  g <- function(a) {f(x-a*grad(f,x))}
+  step <- golden(g,0,5,tol)
+  iteracja <-1
+  new.x <- x - step * grad(f, x)
+  repeat {
+    cat("Iteracja: ", iteracja , "; x= ",x,"; f(x): ",f(x),"\n")
+    s <- grad(f,new.x) - grad(f,x)
+    r <- new.x - x
+    ma <- t(r) %*% s
+    a <- (r %*% t(r))/ma[1,1]
+    mb <- t(s) %*% v %*% s
+    b <- -(v %*% s %*% t(s) %*% v)/mb[1,1]
+    v <- v + a + b
+    x <- new.x
+    new.x <- x - v %*% grad(f,x)
+    new.x <- new.x[,1]
+    dist <- dist(rbind(new.x,x))
+    if (dist(rbind(new.x, x)) < tol) {
+      cat("Iteracja: ", iteracja +1 , "; x= ",x,"; f(x): ",f(x),"\n")
+      return(new.x)
+    }
+    iteracja <- iteracja + 1
+  }
+}
+
+dfp(f3,c(-4,4),0.000001)
+dfp(f4,c(-4,4),0.001)
