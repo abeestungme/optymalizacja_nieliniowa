@@ -759,12 +759,228 @@ dfp <- function(f, x, tol) {
     new.x <- new.x[,1]
     dist <- dist(rbind(new.x,x))
     if (dist(rbind(new.x, x)) < tol) {
-      cat("Iteracja: ", iteracja +1 , "; x= ",x,"; f(x): ",f(x),"\n")
+      cat("Iteracja: ", iteracja +1 , "; x= ",x,"; f(x): ",f(x),";\n V = ", v, "\n")
+      cat("H^-1 = ", inv(hessian(f,new.x)),"\n")
       return(new.x)
     }
     iteracja <- iteracja + 1
   }
 }
 
-dfp(f3,c(-4,4),0.000001)
+dfp(f3,c(-3,3),10^-8)
 dfp(f4,c(-4,4),0.001)
+
+########################################
+#   17.11
+trial_stage <- function (f,x,step) {
+  n <- length(x)
+  versor <- diag(n)
+  i <- 1
+  while (i <= n) {
+    if (f(x + step*versor[i,]) < f(x)) {
+      x <- x + step*versor[i,]
+    } else if (f(x - step*versor[i,]) < f(x)) {
+      x <- x - step*versor[i,]
+    }
+    i <- i + 1
+  }
+  return(x)
+}
+
+hookejeeves <- function (f,x,step,alpha,tol) {
+  it_r <- 0
+  it_p <- 0
+  while (step >= tol) {
+    xb <- x
+    x <- trial_stage(f,xb,step)
+    it_p <- it_p + 1
+    cat("Etap probny  wykonal sie poraz : ", it_p, "\n")
+    if (f(x) < f(xb)) {
+      while (f(x) < f(xb)) {
+        it_r <- it_r + 1
+        cat("Etap roboczy wykonal sie poraz : ", it_r, "\n")
+        old.xb <- xb
+        xb <- x
+        x <- 2*xb-old.xb
+        x <- trial_stage(f,x,step)
+        it_p <- it_p + 1
+        cat("Etap probny  wykonal sie poraz : ", it_p, "\n")
+      }
+      x <- xb
+    } else {
+      step <- alpha * step
+    }
+  }
+  return(xb)
+}
+
+hookejeeves(f3, c(-4,4), 0.1, 0.5, 0.0001)
+hookejeeves(mf4, c(-4,4), 0.1, 0.5, 0.0001)
+
+####################
+#   dla maksimum
+trial_stage_max <- function (f,x,step) {
+  n <- length(x)
+  versor <- diag(n)
+  i <- 1
+  while (i <= n) {
+    if (f(x + step*versor[i,]) > f(x)) {
+      x <- x + step*versor[i,]
+    } else if (f(x - step*versor[i,]) > f(x)) {
+      x <- x - step*versor[i,]
+    }
+    i <- i + 1
+  }
+  return(x)
+}
+hookejeeves_max <- function (f,x,step,alpha,tol) {
+  it_r <- 0
+  it_p <- 0
+  while (step >= tol) {
+    xb <- x
+    x <- trial_stage_max(f,xb,step)
+    it_p <- it_p + 1
+    cat("Etap probny  wykonal sie poraz : ", it_p, "\n")
+    if (f(x) > f(xb)) {
+      while (f(x) > f(xb)) {
+        it_r <- it_r + 1
+        cat("Etap roboczy wykonal sie poraz : ", it_r, "\n")
+        old.xb <- xb
+        xb <- x
+        x <- 2*xb-old.xb
+        x <- trial_stage_max(f,x,step)
+        it_p <- it_p + 1
+        cat("Etap probny  wykonal sie poraz : ", it_p, "\n")
+      }
+      x <- xb
+    } else {
+      step <- alpha * step
+    }
+  }
+  return(xb)
+}
+hookejeeves_max(f4,c(-4,4), 0.1, 0.5, 0.0001)
+
+
+
+
+################
+neldermead <- function(f, x0, alpha, beta, gamma, tol) {
+  n <- length(x0)
+  step <- 0.1 * max(c(abs(x0), 1))
+  x <- matrix(x0, nrow = n + 1, ncol = n, byrow = T) + step * rbind(0, diag(n))
+  f.x <- apply(x, 1, f)
+  iteracja <- 0
+  while(diff(range(f.x)) > tol) {
+    iteracja <- iteracja + 1
+    cat("Iteracja: ", iteracja, " \n")
+    l <- which.min(f.x)
+    f.l <- min(f.x)
+    h <- which.max(f.x)
+    f.h <- max(f.x)
+    xb <- colMeans(x[-h,,drop = F])
+    xr <- (1 + alpha) * xb - alpha * x[h,]
+    f.xr <- f(xr)
+    if (f.xr < f.l) {
+      xe <- (1 - gamma) * xb + gamma * xr
+      f.xe <- f(xe)
+      if (f.xe < f.xr) {
+        x[h,] <- xe
+        f.x[h] <- f.xe
+        cat("Iteracja: ", iteracja, "; Ekspansja \n")
+        
+        } else {
+        x[h,] <- xr
+        f.x[h] <- f.xr
+        cat("Iteracja: ", iteracja, "; Odbicie \n")
+      }
+    } else {
+      shrink <- T
+      if (f.xr < f.x[h]) {
+        x[h,] <- xr
+        f.x[h] <- f.xr
+        shrink <- F
+        cat("Iteracja: ", iteracja, "; Odbicie \n")
+      } else {
+        xc <- beta * xb + (1 - beta) * x[h,]
+        f.xc <- f(xc)
+        if (f.xc < f.x[h]) {
+          x[h,] <- xc
+          f.x[h] <- f.xc
+          cat("Iteracja: ", iteracja, "; Zawezenie \n")
+        }
+        else if ((f.xr >= f.x[h]) && shrink) {
+          x <- matrix(x[l,], nrow = n + 1, ncol = n, byrow = T) +
+            beta * sweep(x, 2, x[l,])
+          f.x <- apply(x, 1, f) 
+          cat("Iteracja: ", iteracja, "; Redukcja \n")
+          
+        }
+      }
+    }
+  }
+  return(x[which.min(f.x),])
+}
+neldermead(f3, c(-3,3), 1, 0.5, 2, 10^-8)
+neldermead(mf4, c(-3,3), 1, 0.5, 2, 10^-8)
+
+
+################
+#     teraz dla maksimum
+neldermead_max <- function(f, x0, alpha, beta, gamma, tol) {
+  n <- length(x0)
+  step <- 0.1 * max(c(abs(x0), 1))
+  x <- matrix(x0, nrow = n + 1, ncol = n, byrow = T) + step * rbind(0, diag(n))
+  f.x <- apply(x, 1, f)
+  iteracja <- 0
+  while(diff(range(f.x)) > tol) {
+    iteracja <- iteracja + 1
+    cat("Iteracja: ", iteracja, "\n")
+    l <- which.max(f.x)
+    f.l <- max(f.x)
+    h <- which.min(f.x)
+    f.h <- min(f.x)
+    xb <- colMeans(x[-h,,drop = F])
+    xr <- (1 + alpha) * xb - alpha * x[h,]
+    f.xr <- f(xr)
+    if (f.xr > f.l) {
+      xe <- (1 - gamma) * xb + gamma * xr
+      f.xe <- f(xe)
+      if (f.xe > f.xr) {
+        x[h,] <- xe
+        f.x[h] <- f.xe
+        cat("Iteracja: ", iteracja, "Ekspansja","\n")
+        
+        
+      } else {
+        x[h,] <- xr
+        f.x[h] <- f.xr
+        cat("Iteracja: ", iteracja, "Odbicie","\n")
+      }
+    } else {
+      shrink <- T
+      if (f.xr > f.x[h]) {
+        x[h,] <- xr
+        f.x[h] <- f.xr
+        shrink <- F
+        cat("Iteracja: ", iteracja, "Odbicie","\n")
+      } else { 
+        xc <- beta * xb + (1 - beta) * x[h,]
+        f.xc <- f(xc)
+        if (f.xc > f.x[h]) {
+          x[h,] <- xc
+          f.x[h] <- f.xc
+          cat("Iteracja: ", iteracja, "Zawezenie","\n")
+        }
+        else if ((f.xr <= f.x[h]) && shrink) {
+          x <- matrix(x[l,], nrow = n + 1, ncol = n, byrow = T) + 
+            beta * sweep(x, 2, x[l,])
+          f.x <- apply(x, 1, f)
+          cat("Iteracja: ", iteracja, "Redukcja","\n")
+        }
+      }
+    }
+  }
+  return(x[which.max(f.x),])
+}
+neldermead_max(f4, c(-3,3), 1, 0.5, 2, 10^-8)
