@@ -873,7 +873,7 @@ neldermead <- function(f, x0, alpha, beta, gamma, tol) {
   iteracja <- 0
   while(diff(range(f.x)) > tol) {
     iteracja <- iteracja + 1
-    cat("Iteracja: ", iteracja, " \n")
+    #cat("Iteracja: ", iteracja, " \n")
     l <- which.min(f.x)
     f.l <- min(f.x)
     h <- which.max(f.x)
@@ -887,12 +887,12 @@ neldermead <- function(f, x0, alpha, beta, gamma, tol) {
       if (f.xe < f.xr) {
         x[h,] <- xe
         f.x[h] <- f.xe
-        cat("Iteracja: ", iteracja, "; Ekspansja \n")
+        #cat("Iteracja: ", iteracja, "; Ekspansja \n")
         
         } else {
         x[h,] <- xr
         f.x[h] <- f.xr
-        cat("Iteracja: ", iteracja, "; Odbicie \n")
+        #cat("Iteracja: ", iteracja, "; Odbicie \n")
       }
     } else {
       shrink <- T
@@ -900,20 +900,20 @@ neldermead <- function(f, x0, alpha, beta, gamma, tol) {
         x[h,] <- xr
         f.x[h] <- f.xr
         shrink <- F
-        cat("Iteracja: ", iteracja, "; Odbicie \n")
+        #cat("Iteracja: ", iteracja, "; Odbicie \n")
       } else {
         xc <- beta * xb + (1 - beta) * x[h,]
         f.xc <- f(xc)
         if (f.xc < f.x[h]) {
           x[h,] <- xc
           f.x[h] <- f.xc
-          cat("Iteracja: ", iteracja, "; Zawezenie \n")
+          #cat("Iteracja: ", iteracja, "; Zawezenie \n")
         }
         else if ((f.xr >= f.x[h]) && shrink) {
           x <- matrix(x[l,], nrow = n + 1, ncol = n, byrow = T) +
             beta * sweep(x, 2, x[l,])
           f.x <- apply(x, 1, f) 
-          cat("Iteracja: ", iteracja, "; Redukcja \n")
+          #cat("Iteracja: ", iteracja, "; Redukcja \n")
           
         }
       }
@@ -984,3 +984,76 @@ neldermead_max <- function(f, x0, alpha, beta, gamma, tol) {
   return(x[which.max(f.x),])
 }
 neldermead_max(f4, c(-3,3), 1, 0.5, 2, 10^-8)
+
+###############################################################################
+#     24.11
+# zad. 1    f(x_1,x_2)=x_1^2-17x_1+3x_2^2-3x_1x_2+90-> min    warunki: 2x_1+4x_2=60. x_1+x_2<= 20
+
+#  zad. 2   f(x_1,x_2)=x_1^2-9x_1-3ln(x_2)-> min
+#     warunki x_1+x_2=5.     x_1>=0 x_!>=0
+
+#ta metoda w projekcie 3 albo jednak metoda barier???? IDK
+
+
+
+#1
+f <- function(x){
+  x[1]^2-17*x[1]+3*x[2]^2-3*x[1]*x[2]+9
+}
+
+w <- function(x){
+  x[1]^2-9*x[1]-3*log(x[2])
+}
+
+g<-function(x){x[1]+x[2]-20}
+h<-function(x){2*x[1]+4*x[2]-60}
+s<-function(x){max(0,g(x))^2+h(x)^2}
+
+external.penalty <- function (f,penalty,x,alpha,tol, g, h) {
+  iteracja <- 0
+  repeat {
+    iteracja = iteracja + 1
+    cat("Iteracja: ", iteracja ,"; x: ",x , "; f(x) = ", f(x), "; g(x) = ", g(x), "; h(x) = ", h(x),"\n")
+    objective <- function (x) {f(x) + alpha * penalty(x)}
+    new.x <- neldermead(objective,x,1,0.5,2,tol)
+    alpha <- 2*alpha
+    if (dist(rbind(new.x,x))<tol) {
+      cat("Iteracja: ", iteracja + 1 ,"; x: ",x , "; f(x) = ", f(x), "; g(x) = ", g(x), "; h(x) = ", h(x),"\n")
+      return(new.x)
+    }
+    x <- new.x
+  }
+}
+
+external.penalty(f, s, c(1,1), 1, 10^(-8), g, h)
+external.penalty(f, s, c(15,15), 1, 10^(-8), g, h)
+external.penalty(f, s, c(-15,20), 1, 10^(-8), g, h)
+
+
+
+#2
+
+gw<-function(x){-x[1]}
+gw2<-function(x){-x[2]}
+hw<-function(x){x[1]+x[2]-5}
+sw<-function(x){max(0,gw(x))^2+max(0, gw2(x))^2+hw(x)^2}
+
+external.penalty.2 <- function (f,penalty,x,alpha,tol, gw, gw2, h) {
+  iteracja <- 0
+  repeat {
+    iteracja = iteracja + 1
+    cat("Iteracja: ", iteracja ,"; x: ",x , "; f(x) = ", f(x), "; gw(x) = ", gw(x), "; gw2(x) = ", gw2(x), "; h(x) = ", h(x),"\n")
+    objective <- function (x) {f(x) + alpha * penalty(x)}
+    new.x <- neldermead(objective,x,1,0.5,2,tol)
+    alpha <- 2*alpha
+    if (dist(rbind(new.x,x))<tol) {
+      cat("Iteracja: ", iteracja +1 ,"; x: ",x , "; f(x) = ", f(x), "; gw(x) = ", gw(x), "; gw2(x) = ", gw2(x), "; h(x) = ", h(x),"\n")
+      return(new.x)
+    }
+    x <- new.x
+  }
+}
+
+external.penalty.2(w, sw, c(1,1), 1, 10^(-8), gw, gw2, hw)
+external.penalty.2(w, sw, c(-5,2), 1, 10^(-8), gw, gw2, hw)
+
